@@ -37,8 +37,8 @@ enum EIP1193 {
 
 /// InAppWebViewEIP1193 wrap InAppWebView(https://pub.dev/packages/flutter_inappwebview)
 /// and config communicate between web app and wallet via standard EIP-1193
-class InAppWebViewEIP1193 extends StatefulWidget {
-  const InAppWebViewEIP1193({
+class Web3WebView extends StatefulWidget {
+  const Web3WebView({
     super.key,
     required this.signCallback,
     this.customPathProvider,
@@ -114,7 +114,7 @@ class InAppWebViewEIP1193 extends StatefulWidget {
 
   //------------------------------------------------------------------------------
   /// If use custom provider, notice use [customPathProvider], [customWalletName], [customConfigFunction].
-  /// If use [InAppWebViewEIP1193]'s provider provide is [PosiProvider]. Please provide [rpcUrl], [chainId], [walletAddress].
+  /// If use [Web3WebView]'s provider provide is [PosiProvider]. Please provide [rpcUrl], [chainId], [walletAddress].
   /// https://github.com/PositionExchange/posi-web3-provider
 
   /// If you do not use provider provide by library you pass by parameter [customPathProvider]
@@ -818,10 +818,10 @@ class InAppWebViewEIP1193 extends StatefulWidget {
   final PullToRefreshController? pullToRefreshController;
 
   @override
-  State<InAppWebViewEIP1193> createState() => _InAppWebViewEIP1193State();
+  State<Web3WebView> createState() => _InAppWebViewEIP1193State();
 }
 
-class _InAppWebViewEIP1193State extends State<InAppWebViewEIP1193> {
+class _InAppWebViewEIP1193State extends State<Web3WebView> {
   /// Script provider will inject in web app
   String? jsProviderScript;
 

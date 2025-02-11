@@ -1,7 +1,7 @@
 name: web3_webview
-description: "Web3 injected to webview"
+description: "The bridge communicate between in-app webview and mobile-app by standard EIP-1193."
 version: 0.0.1
-homepage:
+homepage: https://github.com/datit309309/web3_webview
 
 environment:
   sdk: ^3.5.0

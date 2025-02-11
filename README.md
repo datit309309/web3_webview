@@ -1,7 +1,12 @@
-# Plugin: https://pub.dev/packages/web3_provider
-
-## web3_provider
+# web3_webview
 The project supported send and receive messages between Dapp and in-app webview “Only EIP-1193 standard supported”
+
+# Requirements
+* Flutter 3.24.0 or higher
+
+# Installation
+* Add this to your package's pubspec.yaml file:
+```web3_webview: ^latest```
 
 ## Overview
 
@@ -16,7 +21,7 @@ The project supported send and receive messages between Dapp and in-app webview 
 ## Usage
 
 ```dart
-import 'package:web3_provider/web3_provider.dart';
+import 'package:web3_webview/web3_webview.dart';
 
 InAppWebViewGroupOptions options = InAppWebViewGroupOptions(
   crossPlatform: InAppWebViewOptions(
@@ -111,3 +116,4 @@ onWebViewCreated: (controller) {
     );
 },
 ```
+# Thanks for: https://pub.dev/packages/web3_provider
