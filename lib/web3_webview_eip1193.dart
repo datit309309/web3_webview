@@ -3,7 +3,6 @@ library web3_webview;
 import 'dart:collection';
 import 'dart:io';
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

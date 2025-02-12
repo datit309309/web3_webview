@@ -8,39 +8,13 @@ The project supported send and receive messages between Dapp and in-app webview 
 * Add this to your package's pubspec.yaml file:
 ```web3_webview: ^latest```
 
-## Overview
-
-* Communicate between dapp and your app.
-
-<img src="https://raw.githubusercontent.com/VNAPNIC/web3-provider/master/art/sequence_diagram_communication.png"/>
-
-* Dapp interact with blockchain.
-
-<img src="https://raw.githubusercontent.com/VNAPNIC/web3-provider/master/art/sequence_diagram_sign_transaction.png"/>
-
 ## Usage
 
 ```dart
 import 'package:web3_webview/web3_webview.dart';
 
-InAppWebViewGroupOptions options = InAppWebViewGroupOptions(
-  crossPlatform: InAppWebViewOptions(
-    useShouldOverrideUrlLoading: true,
-    mediaPlaybackRequiresUserGesture: false,
-    userAgent:
-    "Mozilla/5.0 (Linux; Android 4.4.4; SAMSUNG-SM-N900A Build/tt) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/33.0.0.0 Mobile Safari/537.36",
-  ),
-  android: AndroidInAppWebViewOptions(
-    useHybridComposition: true,
-    domStorageEnabled: true,
-  ),
-  ios: IOSInAppWebViewOptions(
-    allowsInlineMediaPlayback: true,
-  ),
-);
-
 /// By default config
-InAppWebViewEIP1193(
+Web3WebView(
     chainId: 56, // Replace your chain id network you want connect
     rpcUrl: 'https://bsc-dataseed.binance.org/', // Replace your rpc url network you want connect
     walletAddress: walletAddress,
@@ -68,11 +42,10 @@ InAppWebViewEIP1193(
           break;  
     },
     initialUrlRequest: URLRequest(
-        url: Uri.parse(
+        url: WebUri(
         'https://position.exchange', // Replace your dapp domain
         ),
     ),
-    initialOptions: options
 );
 ```
 
@@ -116,4 +89,6 @@ onWebViewCreated: (controller) {
     );
 },
 ```
-# Thanks for: https://pub.dev/packages/web3_provider
+# Thanks for: 
+* https://github.com/PositionExchange/flutter-web3-provider
+* https://github.com/PositionExchange/js-web3-provider
