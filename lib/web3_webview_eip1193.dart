@@ -6,45 +6,31 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/gestures.dart';
 
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:uuid/uuid.dart';
 
-import 'json_util.dart';
-
-/// The desired type function receive web via standard EIP-1193.
-enum EIP1193 {
-  /// Pass when web app connect wallet
-  requestAccounts,
-
-  /// Pass when web app approve contract or send transaction
-  signTransaction,
-
-  /// Pass when web app sign a message
-  signMessage,
-
-  /// Pass when web app sign a personal message
-  signPersonalMessage,
-
-  /// Pass when web app sign a type message
-  signTypedMessage,
-
-  /// Pass when web app add a new chain
-  addEthereumChain,
-}
+import 'ethereum/ethereum_provider.dart';
+import 'ethereum/wallet_dialog_service.dart';
+import 'models/models.dart';
 
 /// InAppWebViewEIP1193 wrap InAppWebView(https://pub.dev/packages/flutter_inappwebview)
 /// and config communicate between web app and wallet via standard EIP-1193
 class Web3WebView extends StatefulWidget {
   const Web3WebView({
     super.key,
-    required this.signCallback,
     this.customPathProvider,
-    this.customWalletName = 'defaultWallet',
-    this.rpcUrl,
-    this.chainId,
+    this.customWalletName = 'CustomWallet',
+    this.customIconWalletBase64,
+    this.customIdWallet,
+    this.customDialogWalletTheme,
+    this.currentNetwork,
+    this.supportNetworks,
     this.walletAddress,
+    this.privateKeyWallet,
     this.isDebug = true,
     this.windowId,
     this.initialUrlRequest,
@@ -108,43 +94,39 @@ class Web3WebView extends StatefulWidget {
     this.onNavigationResponse,
     this.shouldAllowDeprecatedTLS,
     this.gestureRecognizers,
-    this.customConfigFunction,
   });
 
-  //------------------------------------------------------------------------------
-  /// If use custom provider, notice use [customPathProvider], [customWalletName], [customConfigFunction].
-  /// If use [Web3WebView]'s provider provide is [PosiProvider]. Please provide [rpcUrl], [chainId], [walletAddress].
-  /// https://github.com/PositionExchange/posi-web3-provider
-
   /// If you do not use provider provide by library you pass by parameter [customPathProvider]
-  /// by default use file assets/posi.min.js
+  /// by default use file assets/ethers.js
   final String? customPathProvider;
 
   /// Wallet name, use to initial web3 by function _loadWeb3()
-  /// Please check in file provider, by default [posi.min.js] is 'posiwallet'
   final String? customWalletName;
 
-  /// Function to initial web3 library for web interact with smart contract.
-  /// Script depend on [provider]
-  final String? customConfigFunction;
+  /// Wallet icon, use to initial web3 by function _loadWeb3()
+  final String? customIconWalletBase64;
+
+  /// Wallet id, use to initial web3 by function _loadWeb3()
+  final String? customIdWallet;
+
+  /// Wallet theme, use to initial web3 by function _loadWeb3()
+  final WalletDialogTheme? customDialogWalletTheme;
 
   //------------------------------------------------------------------------------
 
-  /// rpc url of chain you connect
-  final String? rpcUrl;
+  /// initial network chain config
+  final NetworkConfig? currentNetwork;
 
-  /// chainId of chain you connect
-  final int? chainId;
+  /// support network chain config
+  final List<NetworkConfig>? supportNetworks;
 
   /// your wallet you connect
   final String? walletAddress;
-  final bool isDebug;
 
-  /// Callback when web app interact with data on-chain (by use web3js library)
-  /// [params]
-  /// [eip1193] is type function passed
-  final Function(Map<dynamic, dynamic> rawData, EIP1193 eip1193,
-      InAppWebViewController? controller) signCallback;
+  /// your wallet private key
+  final String? privateKeyWallet;
+
+  final bool isDebug;
 
   /// `gestureRecognizers` specifies which gestures should be consumed by the WebView.
   /// It is possible for other gesture recognizers to be competing with the web view on pointer
@@ -827,18 +809,54 @@ class _InAppWebViewEIP1193State extends State<Web3WebView> {
   /// Load provider and function initial web3 end
   bool isLoadJs = false;
   InAppWebViewController? _webViewController;
+  final EthereumProvider _provider = EthereumProvider();
+  final _defaultNetwork = NetworkConfig(
+    chainId: '0x1',
+    chainName: 'Ethereum Mainnet',
+    nativeCurrency: NativeCurrency(
+      name: 'Ethereum',
+      symbol: 'ETH',
+      decimals: 18,
+    ),
+    rpcUrls: ['https://mainnet.infura.io/v3/'],
+    blockExplorerUrls: ['https://etherscan.io'],
+  );
+  NetworkConfig? _currentNetwork;
+  List<NetworkConfig>? supportNetworks;
 
   @override
   void initState() {
     super.initState();
     _loadWeb3();
+    _currentNetwork = widget.currentNetwork ?? _defaultNetwork;
+    supportNetworks = widget.supportNetworks ?? [_defaultNetwork];
+    _provider.initialize(
+      defaultNetwork: _currentNetwork ?? _defaultNetwork,
+      additionalNetworks: supportNetworks ?? [_defaultNetwork],
+      initialAddress: widget.walletAddress,
+      privateKey: widget.privateKeyWallet ?? '',
+      providerInfo: EIP6963ProviderInfo(
+        uuid: const Uuid().v4(),
+        name: widget.customWalletName ?? 'Custom Wallet',
+        icon: widget.customIconWalletBase64 ??
+            'data:image/svg+xml;base64,PHN2ZyBmaWxsPSJub25lIiBoZWlnaHQ9IjMzIiB2aWV3Qm94PSIwIDAgMzUgMzMiIHdpZHRoPSIzNSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iLjI1Ij48cGF0aCBkPSJtMzIuOTU4MiAxLTEzLjEzNDEgOS43MTgzIDIuNDQyNC01LjcyNzMxeiIgZmlsbD0iI2UxNzcyNiIgc3Ryb2tlPSIjZTE3NzI2Ii8+PGcgZmlsbD0iI2UyNzYyNSIgc3Ryb2tlPSIjZTI3NjI1Ij48cGF0aCBkPSJtMi42NjI5NiAxIDEzLjAxNzE0IDkuODA5LTIuMzI1NC01LjgxODAyeiIvPjxwYXRoIGQ9Im0yOC4yMjk1IDIzLjUzMzUtMy40OTQ3IDUuMzM4NiA3LjQ4MjkgMi4wNjAzIDIuMTQzNi03LjI4MjN6Ii8+PHBhdGggZD0ibTEuMjcyODEgMjMuNjUwMSAyLjEzMDU1IDcuMjgyMyA3LjQ2OTk0LTIuMDYwMy0zLjQ4MTY2LTUuMzM4NnoiLz48cGF0aCBkPSJtMTAuNDcwNiAxNC41MTQ5LTIuMDc4NiAzLjEzNTggNy40MDUuMzM2OS0uMjQ2OS03Ljk2OXoiLz48cGF0aCBkPSJtMjUuMTUwNSAxNC41MTQ5LTUuMTU3NS00LjU4NzA0LS4xNjg4IDguMDU5NzQgNy40MDQ5LS4zMzY5eiIvPjxwYXRoIGQ9Im0xMC44NzMzIDI4Ljg3MjEgNC40ODE5LTIuMTYzOS0zLjg1ODMtMy4wMDYyeiIvPjxwYXRoIGQ9Im0yMC4yNjU5IDI2LjcwODIgNC40Njg5IDIuMTYzOS0uNjEwNS01LjE3MDF6Ii8+PC9nPjxwYXRoIGQ9Im0yNC43MzQ4IDI4Ljg3MjEtNC40NjktMi4xNjM5LjM2MzggMi45MDI1LS4wMzkgMS4yMzF6IiBmaWxsPSIjZDViZmIyIiBzdHJva2U9IiNkNWJmYjIiLz48cGF0aCBkPSJtMTAuODczMiAyOC44NzIxIDQuMTU3MiAxLjk2OTYtLjAyNi0xLjIzMS4zNTA4LTIuOTAyNXoiIGZpbGw9IiNkNWJmYjIiIHN0cm9rZT0iI2Q1YmZiMiIvPjxwYXRoIGQ9Im0xNS4xMDg0IDIxLjc4NDItMy43MTU1LTEuMDg4NCAyLjYyNDMtMS4yMDUxeiIgZmlsbD0iIzIzMzQ0NyIgc3Ryb2tlPSIjMjMzNDQ3Ii8+PHBhdGggZD0ibTIwLjUxMjYgMjEuNzg0MiAxLjA5MTMtMi4yOTM1IDIuNjM3MiAxLjIwNTF6IiBmaWxsPSIjMjMzNDQ3IiBzdHJva2U9IiMyMzM0NDciLz48cGF0aCBkPSJtMTAuODczMyAyOC44NzIxLjY0OTUtNS4zMzg2LTQuMTMxMTcuMTE2N3oiIGZpbGw9IiNjYzYyMjgiIHN0cm9rZT0iI2NjNjIyOCIvPjxwYXRoIGQ9Im0yNC4wOTgyIDIzLjUzMzUuNjM2NiA1LjMzODYgMy40OTQ2LTUuMjIxOXoiIGZpbGw9IiNjYzYyMjgiIHN0cm9rZT0iI2NjNjIyOCIvPjxwYXRoIGQ9Im0yNy4yMjkxIDE3LjY1MDctNy40MDUuMzM2OS42ODg1IDMuNzk2NiAxLjA5MTMtMi4yOTM1IDIuNjM3MiAxLjIwNTF6IiBmaWxsPSIjY2M2MjI4IiBzdHJva2U9IiNjYzYyMjgiLz48cGF0aCBkPSJtMTEuMzkyOSAyMC42OTU4IDIuNjI0Mi0xLjIwNTEgMS4wOTEzIDIuMjkzNS42ODg1LTMuNzk2Ni03LjQwNDk1LS4zMzY5eiIgZmlsbD0iI2NjNjIyOCIgc3Ryb2tlPSIjY2M2MjI4Ii8+PHBhdGggZD0ibTguMzkyIDE3LjY1MDcgMy4xMDQ5IDYuMDUxMy0uMTAzOS0zLjAwNjJ6IiBmaWxsPSIjZTI3NTI1IiBzdHJva2U9IiNlMjc1MjUiLz48cGF0aCBkPSJtMjQuMjQxMiAyMC42OTU4LS4xMTY5IDMuMDA2MiAzLjEwNDktNi4wNTEzeiIgZmlsbD0iI2UyNzUyNSIgc3Ryb2tlPSIjZTI3NTI1Ii8+PHBhdGggZD0ibTE1Ljc5NyAxNy45ODc2LS42ODg2IDMuNzk2Ny44NzA0IDQuNDgzMy4xOTQ5LTUuOTA4N3oiIGZpbGw9IiNlMjc1MjUiIHN0cm9rZT0iI2UyNzUyNSIvPjxwYXRoIGQ9Im0xOS44MjQyIDE3Ljk4NzYtLjM2MzggMi4zNTg0LjE4MTkgNS45MjE2Ljg3MDQtNC40ODMzeiIgZmlsbD0iI2UyNzUyNSIgc3Ryb2tlPSIjZTI3NTI1Ii8+PHBhdGggZD0ibTIwLjUxMjcgMjEuNzg0Mi0uODcwNCA0LjQ4MzQuNjIzNi40NDA2IDMuODU4NC0zLjAwNjIuMTE2OS0zLjAwNjJ6IiBmaWxsPSIjZjU4NDFmIiBzdHJva2U9IiNmNTg0MWYiLz48cGF0aCBkPSJtMTEuMzkyOSAyMC42OTU4LjEwNCAzLjAwNjIgMy44NTgzIDMuMDA2Mi42MjM2LS40NDA2LS44NzA0LTQuNDgzNHoiIGZpbGw9IiNmNTg0MWYiIHN0cm9rZT0iI2Y1ODQxZiIvPjxwYXRoIGQ9Im0yMC41OTA2IDMwLjg0MTcuMDM5LTEuMjMxLS4zMzc4LS4yODUxaC00Ljk2MjZsLS4zMjQ4LjI4NTEuMDI2IDEuMjMxLTQuMTU3Mi0xLjk2OTYgMS40NTUxIDEuMTkyMSAyLjk0ODkgMi4wMzQ0aDUuMDUzNmwyLjk2Mi0yLjAzNDQgMS40NDItMS4xOTIxeiIgZmlsbD0iI2MwYWM5ZCIgc3Ryb2tlPSIjYzBhYzlkIi8+PHBhdGggZD0ibTIwLjI2NTkgMjYuNzA4Mi0uNjIzNi0uNDQwNmgtMy42NjM1bC0uNjIzNi40NDA2LS4zNTA4IDIuOTAyNS4zMjQ4LS4yODUxaDQuOTYyNmwuMzM3OC4yODUxeiIgZmlsbD0iIzE2MTYxNiIgc3Ryb2tlPSIjMTYxNjE2Ii8+PHBhdGggZD0ibTMzLjUxNjggMTEuMzUzMiAxLjEwNDMtNS4zNjQ0Ny0xLjY2MjktNC45ODg3My0xMi42OTIzIDkuMzk0NCA0Ljg4NDYgNC4xMjA1IDYuODk4MyAyLjAwODUgMS41Mi0xLjc3NTItLjY2MjYtLjQ3OTUgMS4wNTIzLS45NTg4LS44MDU0LS42MjIgMS4wNTIzLS44MDM0eiIgZmlsbD0iIzc2M2UxYSIgc3Ryb2tlPSIjNzYzZTFhIi8+PHBhdGggZD0ibTEgNS45ODg3MyAxLjExNzI0IDUuMzY0NDctLjcxNDUxLjUzMTMgMS4wNjUyNy44MDM0LS44MDU0NS42MjIgMS4wNTIyOC45NTg4LS42NjI1NS40Nzk1IDEuNTE5OTcgMS43NzUyIDYuODk4MzUtMi4wMDg1IDQuODg0Ni00LjEyMDUtMTIuNjkyMzMtOS4zOTQ0eiIgZmlsbD0iIzc2M2UxYSIgc3Ryb2tlPSIjNzYzZTFhIi8+PHBhdGggZD0ibTMyLjA0ODkgMTYuNTIzNC02Ljg5ODMtMi4wMDg1IDIuMDc4NiAzLjEzNTgtMy4xMDQ5IDYuMDUxMyA0LjEwNTItLjA1MTloNi4xMzE4eiIgZmlsbD0iI2Y1ODQxZiIgc3Ryb2tlPSIjZjU4NDFmIi8+PHBhdGggZD0ibTEwLjQ3MDUgMTQuNTE0OS02Ljg5ODI4IDIuMDA4NS0yLjI5OTQ0IDcuMTI2N2g2LjExODgzbDQuMTA1MTkuMDUxOS0zLjEwNDg3LTYuMDUxM3oiIGZpbGw9IiNmNTg0MWYiIHN0cm9rZT0iI2Y1ODQxZiIvPjxwYXRoIGQ9Im0xOS44MjQxIDE3Ljk4NzYuNDQxNy03LjU5MzIgMi4wMDA3LTUuNDAzNGgtOC45MTE5bDIuMDAwNiA1LjQwMzQuNDQxNyA3LjU5MzIuMTY4OSAyLjM4NDIuMDEzIDUuODk1OGgzLjY2MzVsLjAxMy01Ljg5NTh6IiBmaWxsPSIjZjU4NDFmIiBzdHJva2U9IiNmNTg0MWYiLz48L2c+PC9zdmc+',
+        rdns: widget.customIdWallet ?? 'com.custom.wallet',
+      ),
+      theme: widget.customDialogWalletTheme ?? WalletDialogTheme(),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _provider.setContext(context);
   }
 
   ///Load provider initial web3 to inject web app
   Future<void> _loadWeb3() async {
     String? web3;
-    String path =
-        widget.customPathProvider ?? 'packages/web3_webview/assets/posi.min.js';
+    String path = widget.customPathProvider ??
+        'packages/web3_webview/assets/ethers.min.js';
     web3 = await DefaultAssetBundle.of(context).loadString(path);
     if (mounted) {
       setState(() {
@@ -850,56 +868,7 @@ class _InAppWebViewEIP1193State extends State<Web3WebView> {
 
   /// Get function with newest config
   String _getFunctionInject() {
-    var paramConfig = widget.customConfigFunction ??
-        """{
-              ethereum: {
-                chainId: ${widget.chainId},
-                rpcUrl: "${widget.rpcUrl}",
-                address: "${widget.walletAddress}",
-                isDebug: ${widget.isDebug}  
-              }
-            }""";
-
-    var config = """
-         (function() {
-           var config = $paramConfig;
-            window.ethereum = new ${widget.customWalletName}.Provider(config);
-            ${widget.customWalletName}.postMessage = (jsonString) => {
-               if (window.flutter_inappwebview.callHandler) {
-                  window.flutter_inappwebview.callHandler('handleRequestEIP1193', JSON.stringify(jsonString));
-               }
-            };
-        })();
-        """;
-    return config;
-  }
-
-  /// Callback handle data receive from dapp
-  Future<void> _jsBridgeCallBack(String message) async {
-    Map<dynamic, dynamic> rawData = JsonUtil.getObj(message);
-    final name = rawData["name"];
-    if (name == 'requestAccounts' || name == 'eth_requestAccounts') {
-      widget.signCallback(rawData, EIP1193.requestAccounts, _webViewController);
-    } else if (name == 'signTransaction' ||
-        name == 'signMessage' ||
-        name == 'signPersonalMessage' ||
-        name == 'signTypedMessage') {
-      if (name == 'signTransaction') {
-        widget.signCallback(
-            rawData, EIP1193.signTransaction, _webViewController);
-      } else if (name == 'signMessage') {
-        widget.signCallback(rawData, EIP1193.signMessage, _webViewController);
-      } else if (name == 'signPersonalMessage') {
-        widget.signCallback(
-            rawData, EIP1193.signPersonalMessage, _webViewController);
-      } else if (name == 'signTypedMessage') {
-        widget.signCallback(
-            rawData, EIP1193.signTypedMessage, _webViewController);
-      }
-    } else {
-      widget.signCallback(
-          rawData, EIP1193.addEthereumChain, _webViewController);
-    }
+    return _provider.getProviderScript();
   }
 
   @override
@@ -931,10 +900,27 @@ class _InAppWebViewEIP1193State extends State<Web3WebView> {
             contextMenu: widget.contextMenu,
             onWebViewCreated: (controller) async {
               _webViewController = controller;
+              _provider.setWebViewController(controller);
+              // Đăng ký handler để nhận message từ JavaScript
               controller.addJavaScriptHandler(
-                handlerName: 'handleRequestEIP1193',
-                callback: (args) {
-                  _jsBridgeCallBack(args[0]);
+                handlerName: 'ethereumRequest',
+                callback: (args) async {
+                  final request = args[0] as Map<String, dynamic>;
+                  final method = request['method'] as String;
+                  final params = request['params'] as List<dynamic>?;
+                  // final chainId = request['chainId'] as String?;
+                  try {
+                    return await _provider.handleRequest(
+                      method,
+                      params,
+                      // chainId: chainId,
+                    );
+                  } catch (e) {
+                    throw PlatformException(
+                      code: 'WALLET_ERROR',
+                      message: e.toString(),
+                    );
+                  }
                 },
               );
               widget.onWebViewCreated?.call(controller);
