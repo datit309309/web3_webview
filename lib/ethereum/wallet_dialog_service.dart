@@ -191,22 +191,27 @@ class WalletDialogService {
       children: [
         Text('Permission', style: _theme.headerStyle.copyWith(fontSize: 16)),
         SizedBox(height: _theme.itemSpacing),
-        const Text('Do you want this site to do the following?'),
+        Text(
+          'Do you want this site to do the following?',
+          style: _theme.valueStyle,
+        ),
         SizedBox(height: _theme.itemSpacing),
         _buildContainer(
-          child: const Wrap(
+          child: Wrap(
             alignment: WrapAlignment.start,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                  'See address, account balance, activity and suggest transactions to approve')
+                  'See address, account balance, activity and suggest transactions to approve',
+                  style: _theme.valueStyle)
             ],
           ),
         ),
         SizedBox(height: _theme.itemSpacing),
-        const Text(
+        Text(
           'Only connect with sites you trust.',
           textAlign: TextAlign.center,
+          style: _theme.valueStyle,
         ),
       ],
     );
@@ -245,7 +250,7 @@ class WalletDialogService {
           SizedBox(height: _theme.itemSpacing),
           _buildInfoRow('Request from', requestFrom),
           Divider(color: _theme.borderColor),
-          const Text('Message to sign:'),
+          Text('Message to sign:', style: _theme.valueStyle),
           SizedBox(height: _theme.itemSpacing),
           GestureDetector(
             onTap: () => AppUtils.copyToClipboard(message),
@@ -290,7 +295,7 @@ class WalletDialogService {
           SizedBox(height: _theme.itemSpacing),
           _buildInfoRow('To', to.ellipsisMidWalletAddress()),
           SizedBox(height: _theme.itemSpacing),
-          const Text('Details'),
+          Text('Details', style: _theme.valueStyle),
           SizedBox(height: _theme.itemSpacing),
           if (gas != null)
             _buildContainer(
@@ -318,7 +323,10 @@ class WalletDialogService {
           ],
           if (data != null) ...[
             SizedBox(height: _theme.itemSpacing),
-            const Text('Hex Data'),
+            Text(
+              'Hex Data',
+              style: _theme.valueStyle,
+            ),
             SizedBox(height: _theme.itemSpacing),
             _buildContainer(
               child: Text(data.toString(), style: _theme.valueStyle),

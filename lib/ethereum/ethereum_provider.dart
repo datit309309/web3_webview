@@ -287,9 +287,8 @@ class EthereumProvider {
       }
 
       _updateState(chainId: newChainId);
-      await _updateNetwork(network).withLoading(_context!, 'Switching network');
       await _emitToWebView('chainChanged', newChainId);
-
+      await _updateNetwork(network).withLoading(_context!, 'Switching network');
       return true;
     } catch (e) {
       throw WalletException('Network switch failed: $e');
