@@ -94,7 +94,7 @@ class EthereumProvider {
     _state = WalletState(
       chainId: defaultNetwork.chainId,
       address: getAddressFromPrivateKey(privateKey),
-      isConnected: false,
+      isConnected: getAddressFromPrivateKey(privateKey) != null,
     );
 
     // Add networks
@@ -114,7 +114,6 @@ class EthereumProvider {
     if (_context == null) {
       throw WalletException('Provider context not set');
     }
-
     try {
       switch (JsonRpcMethod.fromString(method)) {
         case JsonRpcMethod.ETH_REQUEST_ACCOUNTS:
@@ -127,14 +126,22 @@ class EthereumProvider {
           return _state.chainId;
         case JsonRpcMethod.NET_VERSION:
           return _state.chainId;
+        case JsonRpcMethod.ETH_CALL:
+          return await _txHandler.handleTransaction(params?.first);
         case JsonRpcMethod.ETH_SEND_TRANSACTION:
-          return await _handleSignTransaction(params?.first);
+          if (params == null || params.isEmpty) {
+            throw WalletException('Missing call parameters');
+          }
+          return await _handleSignTransaction(params.first);
         case JsonRpcMethod.ETH_GET_BALANCE:
           final address = params?.first;
           final balance = await _web3client.getBalance(
             EthereumAddress.fromHex(address),
           );
           return balance.getInEther.toString();
+        case JsonRpcMethod.ETH_GAS_PRICE:
+          final gasPrice = await _web3client.getGasPrice();
+          return gasPrice.getInWei.toString();
         case JsonRpcMethod.ETH_ESTIMATE_GAS:
           if (params == null || params.isEmpty) {
             throw WalletException('Missing transaction parameters');
@@ -165,9 +172,14 @@ class EthereumProvider {
           if (params?.isNotEmpty == true) {
             return await _handleAddEthereumChain(params?.first);
           }
-          throw WalletException('Invalid network config');
+          throw WalletException('Invalid network parameters');
+        case JsonRpcMethod.WALLET_GET_PERMISSIONS:
+          return ['eth_accounts', 'eth_chainId', 'personal_sign'];
+        case JsonRpcMethod.WALLET_REVOKE_PERMISSIONS:
+          return true;
         default:
-          debugPrint('Method $method not supported');
+          print('=======================> Method $method not supported');
+          return null;
         // throw WalletException('Method $method not supported');
       }
     } catch (e) {
@@ -262,7 +274,8 @@ class EthereumProvider {
         throw WalletException('User rejected signing transaction');
       }
 
-      return await _handleSignTransaction(params)
+      return await _txHandler
+          .handleTransaction(params)
           .withLoading(_context!, 'Waiting for transaction');
     } catch (e) {
       throw WalletException('Failed to sign transaction: $e');
@@ -271,9 +284,8 @@ class EthereumProvider {
 
   Future<bool> _handleSwitchNetwork(String newChainId) async {
     if (!_networks.containsKey(newChainId)) {
-      throw WalletException('Network not configured');
+      throw WalletException('Network not supported: $newChainId');
     }
-
     try {
       final network = _networks[newChainId]!;
 

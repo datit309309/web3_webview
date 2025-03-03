@@ -67,6 +67,7 @@ enum JsonRpcMethod {
   WALLET_REQUEST_PERMISSIONS('wallet_requestpermissions'),
   WALLET_GET_PERMISSIONS('wallet_getpermissions'),
   WALLET_WATCH_ASSET('wallet_watchasset'),
+  WALLET_REVOKE_PERMISSIONS('wallet_revokepermissions'),
 
   // Net Methods
   NET_VERSION('net_version'),

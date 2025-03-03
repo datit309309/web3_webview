@@ -773,7 +773,7 @@ class _InAppWebViewEIP1193State extends State<Web3WebView> {
   bool isLoadJs = false;
   InAppWebViewController? _webViewController;
   final EthereumProvider _provider = EthereumProvider();
-  final _defaultNetwork = NetworkConfig(
+  final _ethNetwork = NetworkConfig(
     chainId: '0x1',
     chainName: 'Ethereum Mainnet',
     nativeCurrency: NativeCurrency(
@@ -784,20 +784,26 @@ class _InAppWebViewEIP1193State extends State<Web3WebView> {
     rpcUrls: ['https://mainnet.infura.io/v3/'],
     blockExplorerUrls: ['https://etherscan.io'],
   );
-  NetworkConfig? _currentNetwork;
-  List<NetworkConfig>? supportNetworks;
+  final _bscNetwork = NetworkConfig(
+    chainId: '0x38',
+    chainName: 'Binance Smart Chain Mainnet',
+    nativeCurrency: NativeCurrency(
+      name: 'Binance Coin',
+      symbol: 'BNB',
+      decimals: 18,
+    ),
+    rpcUrls: ['https://bsc-dataseed.binance.org/'],
+    blockExplorerUrls: ['https://bscscan.com'],
+  );
 
   @override
   void initState() {
     super.initState();
     _loadWeb3();
-    _currentNetwork =
-        widget.web3WalletConfig?.currentNetwork ?? _defaultNetwork;
-    supportNetworks =
-        widget.web3WalletConfig?.supportNetworks ?? [_defaultNetwork];
     _provider.initialize(
-      defaultNetwork: _currentNetwork ?? _defaultNetwork,
-      additionalNetworks: supportNetworks ?? [_defaultNetwork],
+      defaultNetwork: widget.web3WalletConfig?.currentNetwork ?? _ethNetwork,
+      additionalNetworks: widget.web3WalletConfig?.supportNetworks ??
+          [_ethNetwork, _bscNetwork],
       privateKey: widget.web3WalletConfig?.privateKey ?? '',
       providerInfo: EIP6963ProviderInfo(
         uuid: const Uuid().v4(),
@@ -902,10 +908,10 @@ class _InAppWebViewEIP1193State extends State<Web3WebView> {
                   } catch (e) {
                     widget.web3WalletConfig?.onError?.call(
                         JsonRpcMethod.fromString(method), params, e.toString());
-                    throw PlatformException(
-                      code: 'WALLET_ERROR',
-                      message: e.toString(),
-                    );
+                    // throw PlatformException(
+                    //   code: 'WALLET_ERROR',
+                    //   message: e.toString(),
+                    // );
                   }
                 },
               );

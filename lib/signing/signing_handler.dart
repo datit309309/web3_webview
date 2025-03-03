@@ -58,13 +58,15 @@ class SigningHandler {
         // Nếu là hex string, decode trực tiếp thành bytes
         messageBytes = HexUtils.hexToBytes(message);
         // Thêm prefix sau khi decode hex
-        final prefix = '\x19Ethereum Signed Message:\n${messageBytes.length}';
+        // final prefix = '\x19Ethereum Signed Message:\n${messageBytes.length}';
+        const prefix = ''; // Không cần prefix cho hex string
         messageBytes =
             Uint8List.fromList([...utf8.encode(prefix), ...messageBytes]);
       } else {
         // Nếu là plain text
         final utf8Bytes = utf8.encode(message);
-        final prefix = '\x19Ethereum Signed Message:\n${utf8Bytes.length}';
+        // final prefix = '\x19Ethereum Signed Message:\n${utf8Bytes.length}';
+        const prefix = ''; // Không cần prefix cho plain text
         messageBytes =
             Uint8List.fromList([...utf8.encode(prefix), ...utf8Bytes]);
       }
@@ -227,7 +229,8 @@ class SigningHandler {
       }
 
       // Tạo prefix theo chuẩn Ethereum
-      final prefix = '\u0019Ethereum Signed Message:\n${messageBytes.length}';
+      // final prefix = '\u0019Ethereum Signed Message:\n${messageBytes.length}';
+      const prefix = '';
       final prefixBytes = Uint8List.fromList(utf8.encode(prefix));
 
       // Kết hợp prefix và message
