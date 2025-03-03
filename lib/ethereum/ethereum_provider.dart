@@ -5,8 +5,10 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart';
+import 'package:web3_webview/utils/loading.dart';
 import 'package:web3dart/web3dart.dart';
 
+import '../json_rpc_method.dart';
 import '../exceptions.dart';
 import '../models/models.dart';
 import '../provider/provider_script.dart';
@@ -52,12 +54,15 @@ class EthereumProvider {
     _context = context;
   }
 
+  void setWebViewController(InAppWebViewController controller) {
+    _webViewController = controller;
+  }
+
   Future<void> initialize({
     required NetworkConfig defaultNetwork,
     required String privateKey,
     required EIP6963ProviderInfo providerInfo,
     List<NetworkConfig> additionalNetworks = const [],
-    String? initialAddress,
     WalletDialogTheme? theme,
   }) async {
     // Configure dialog service theme
@@ -65,6 +70,8 @@ class EthereumProvider {
 
     // Configure provider info
     _eip6963ProviderInfo = providerInfo;
+
+    _updateNetwork(defaultNetwork);
 
     // Initialize Web3 client
     _web3client = Web3Client(
@@ -86,8 +93,8 @@ class EthereumProvider {
     // Setup initial state
     _state = WalletState(
       chainId: defaultNetwork.chainId,
-      address: initialAddress,
-      isConnected: initialAddress != null,
+      address: getAddressFromPrivateKey(privateKey),
+      isConnected: getAddressFromPrivateKey(privateKey) != null,
     );
 
     // Add networks
@@ -97,12 +104,10 @@ class EthereumProvider {
     }
   }
 
-  void setWebViewController(InAppWebViewController controller) {
-    _webViewController = controller;
-  }
-
-  void _addNetwork(NetworkConfig network) {
-    _networks[network.chainId] = network;
+  getAddressFromPrivateKey(String privateKey) {
+    final credentials = EthPrivateKey.fromHex(privateKey);
+    final address = credentials.address;
+    return address.hexEip55;
   }
 
   Future<dynamic> handleRequest(String method, List<dynamic>? params) async {
@@ -111,47 +116,54 @@ class EthereumProvider {
     }
 
     try {
-      switch (method) {
-        case 'eth_requestAccounts':
+      switch (JsonRpcMethod.fromString(method)) {
+        case JsonRpcMethod.ETH_REQUEST_ACCOUNTS:
           return await _handleConnect();
-        case 'eth_accounts':
+        case JsonRpcMethod.ETH_ACCOUNTS:
           return _getConnectedAccounts();
-        case 'eth_blockNumber':
+        case JsonRpcMethod.ETH_BLOCK_NUMBER:
           return await _handleBlockNumber();
-        case 'eth_chainId':
+        case JsonRpcMethod.ETH_CHAIN_ID:
           return _state.chainId;
-        case 'net_version':
+        case JsonRpcMethod.NET_VERSION:
           return _state.chainId;
-        case 'eth_sendTransaction':
-          return await _txHandler.handleTransaction(params?.first);
-        case 'eth_getBalance':
+        case JsonRpcMethod.ETH_SEND_TRANSACTION:
+          return await _handleSignTransaction(params?.first);
+        case JsonRpcMethod.ETH_GET_BALANCE:
           final address = params?.first;
           final balance = await _web3client.getBalance(
             EthereumAddress.fromHex(address),
           );
           return balance.getInEther.toString();
-        case 'eth_estimateGas':
+        case JsonRpcMethod.ETH_ESTIMATE_GAS:
           if (params == null || params.isEmpty) {
             throw WalletException('Missing transaction parameters');
           }
           return await _txHandler.estimateGas(params[0]);
-        case 'personal_sign':
-        case 'eth_sign':
-        case 'eth_signTypedData_v4':
-          return await _signingHandler.signMessage({
-            'type': method,
-            'from': params?[0],
-            'message': params?[1],
-          });
-        case 'wallet_switchEthereumChain':
+        case JsonRpcMethod.PERSONAL_SIGN:
+        case JsonRpcMethod.ETH_SIGN:
+        case JsonRpcMethod.ETH_SIGN_TYPED_DATA:
+        case JsonRpcMethod.ETH_SIGN_TYPED_DATA_V1:
+        case JsonRpcMethod.ETH_SIGN_TYPED_DATA_V3:
+        case JsonRpcMethod.ETH_SIGN_TYPED_DATA_V4:
+          if (params == null || params.isEmpty) {
+            throw WalletException('Missing sign parameters');
+          }
+          return await _handleSignMessage(method, params);
+        case JsonRpcMethod.PERSONAL_EC_RECOVER:
+          if (params == null || params.isEmpty) {
+            throw WalletException('Missing sign parameters');
+          }
+          return _signingHandler.personalEcRecover(params[0], params[1]);
+        case JsonRpcMethod.WALLET_SWITCH_ETHEREUM_CHAIN:
           if (params?.isNotEmpty == true) {
             final newChainId = params?.first['chainId'];
-            return await switchNetwork(newChainId);
+            return await _handleSwitchNetwork(newChainId);
           }
           throw WalletException('Invalid chain ID');
-        case 'wallet_addEthereumChain':
+        case JsonRpcMethod.WALLET_ADD_ETHEREUM_CHAIN:
           if (params?.isNotEmpty == true) {
-            return await _addEthereumChain(params?.first);
+            return await _handleAddEthereumChain(params?.first);
           }
           throw WalletException('Invalid network config');
         default:
@@ -163,6 +175,21 @@ class EthereumProvider {
     }
   }
 
+  String getProviderScript() {
+    return ProviderScriptGenerator.generate(
+      chainId: _state.chainId,
+      accounts: _getConnectedAccounts(),
+      isConnected: _state.isConnected,
+      providerInfo: _eip6963ProviderInfo!,
+    );
+  }
+
+  void dispose() {
+    _stateController.close();
+    _web3client.dispose();
+  }
+
+  // Method handlers
   Future<List<String>> _handleConnect() async {
     try {
       final confirmed = await _dialogService.showConnectWallet(
@@ -191,47 +218,58 @@ class EthereumProvider {
     }
   }
 
-  List<String> _getConnectedAccounts() {
-    return _state.address != null ? [_state.address!] : [];
-  }
-
-  Future<String> _handleBlockNumber() async {
+  Future<String> _handleSignMessage(String method, List<dynamic> params) async {
     try {
-      if (_isBlockNumberCacheValid()) {
-        return _cachedBlockNumber!;
+      var message = params.first;
+      String from = params[1];
+      String password = params.length > 2 ? params[2] : '';
+      if (JsonRpcMethod.ETH_SIGN == JsonRpcMethod.fromString(method) ||
+          JsonRpcMethod.ETH_SIGN_TYPED_DATA_V3 ==
+              JsonRpcMethod.fromString(method) ||
+          JsonRpcMethod.ETH_SIGN_TYPED_DATA_V4 ==
+              JsonRpcMethod.fromString(method)) {
+        from = params.first;
+        message = params[1];
+      }
+      final confirmed = await _dialogService.showSignMessage(
+        _context!,
+        message: message.toString(),
+        address: _state.address!,
+        ctrl: _webViewController!,
+      );
+
+      if (confirmed != true) {
+        throw WalletException('User rejected signing message');
       }
 
-      final blockNumber = await _fetchBlockNumber();
-      _updateBlockNumberCache(blockNumber);
-      return blockNumber;
+      return await _signingHandler
+          .signMessage(method, from, message, password)
+          .withLoading(_context!, 'Waiting for signature');
     } catch (e) {
-      throw WalletException('Failed to get block number: $e');
+      throw WalletException('Failed to sign message: $e');
     }
   }
 
-  bool _isBlockNumberCacheValid() {
-    if (_lastBlockFetch == null || _cachedBlockNumber == null) {
-      return false;
-    }
-    return DateTime.now().difference(_lastBlockFetch!) <
-        _blockNumberCacheDuration;
-  }
-
-  void _updateBlockNumberCache(String blockNumber) {
-    _cachedBlockNumber = blockNumber;
-    _lastBlockFetch = DateTime.now();
-  }
-
-  Future<String> _fetchBlockNumber() async {
+  Future _handleSignTransaction(Map<String, dynamic> params) async {
     try {
-      final blockNumber = await _web3client.getBlockNumber();
-      return HexUtils.numberToHex(blockNumber);
+      final confirmed = await _dialogService.showTransactionConfirm(
+        _context!,
+        txParams: params,
+        ctrl: _webViewController!,
+      );
+
+      if (confirmed != true) {
+        throw WalletException('User rejected signing transaction');
+      }
+
+      return await _handleSignTransaction(params)
+          .withLoading(_context!, 'Waiting for transaction');
     } catch (e) {
-      throw WalletException('Failed to fetch block number: $e');
+      throw WalletException('Failed to sign transaction: $e');
     }
   }
 
-  Future<bool> switchNetwork(String newChainId) async {
+  Future<bool> _handleSwitchNetwork(String newChainId) async {
     if (!_networks.containsKey(newChainId)) {
       throw WalletException('Network not configured');
     }
@@ -249,7 +287,7 @@ class EthereumProvider {
       }
 
       _updateState(chainId: newChainId);
-      await _updateNetwork(network);
+      await _updateNetwork(network).withLoading(_context!, 'Switching network');
       await _emitToWebView('chainChanged', newChainId);
 
       return true;
@@ -258,7 +296,8 @@ class EthereumProvider {
     }
   }
 
-  Future<bool> _addEthereumChain(Map<String, dynamic> networkParams) async {
+  Future<bool> _handleAddEthereumChain(
+      Map<String, dynamic> networkParams) async {
     try {
       final config = NetworkConfig(
         chainId: networkParams['chainId'],
@@ -289,13 +328,57 @@ class EthereumProvider {
     }
   }
 
+  List<String> _getConnectedAccounts() {
+    return _state.address != null ? [_state.address!] : [];
+  }
+
+  Future<String> _handleBlockNumber() async {
+    try {
+      if (_isBlockNumberCacheValid()) {
+        return _cachedBlockNumber!;
+      }
+
+      final blockNumber = await _fetchBlockNumber();
+      _updateBlockNumberCache(blockNumber);
+      return blockNumber;
+    } catch (e) {
+      throw WalletException('Failed to get block number: $e');
+    }
+  }
+
+  // Methods helpers
+  void _addNetwork(NetworkConfig network) {
+    _networks[network.chainId] = network;
+  }
+
+  bool _isBlockNumberCacheValid() {
+    if (_lastBlockFetch == null || _cachedBlockNumber == null) {
+      return false;
+    }
+    return DateTime.now().difference(_lastBlockFetch!) <
+        _blockNumberCacheDuration;
+  }
+
+  void _updateBlockNumberCache(String blockNumber) {
+    _cachedBlockNumber = blockNumber;
+    _lastBlockFetch = DateTime.now();
+  }
+
+  Future<String> _fetchBlockNumber() async {
+    try {
+      final blockNumber = await _web3client.getBlockNumber();
+      return HexUtils.numberToHex(blockNumber);
+    } catch (e) {
+      throw WalletException('Failed to fetch block number: $e');
+    }
+  }
+
   Future<void> _updateNetwork(NetworkConfig network) async {
     _web3client.dispose();
     _web3client = Web3Client(
       network.rpcUrls.first,
       Client(),
     );
-
     _txHandler = TransactionHandler(
       _web3client,
       _credentials,
@@ -321,19 +404,5 @@ class EthereumProvider {
       """;
       await _webViewController!.evaluateJavascript(source: js);
     }
-  }
-
-  String getProviderScript() {
-    return ProviderScriptGenerator.generate(
-      chainId: _state.chainId,
-      accounts: _getConnectedAccounts(),
-      isConnected: _state.isConnected,
-      providerInfo: _eip6963ProviderInfo!,
-    );
-  }
-
-  void dispose() {
-    _stateController.close();
-    _web3client.dispose();
   }
 }

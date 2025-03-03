@@ -6,3 +6,4 @@ export './ethereum/wallet_dialog_service.dart';
 export 'exceptions.dart';
 export 'web3_webview_eip1193.dart';
 export 'web3_js_bridge_callback.dart';
+export 'json_rpc_method.dart';

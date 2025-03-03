@@ -1,3 +1,12 @@
+## 1.0.3
+* Update README.md
+
+## 1.0.2
+* Fix bug
+
+## 1.0.1
+* Fix bug
+
 ## 1.0.0
 * Big update
 * Using ethers.js [6.7.0] instead of web3.js

@@ -2,19 +2,6 @@ import 'package:clipboard/clipboard.dart';
 import 'package:intl/intl.dart';
 
 class AppUtils {
-  static String formatCurrency(String text) {
-    final number = double.tryParse(text) ?? 0;
-
-    final formatted = NumberFormat.currency(
-      locale: 'en',
-      symbol: 'đ',
-      decimalDigits: 0,
-      customPattern: '#,### \u00a4',
-    ).format(number).toString();
-
-    return formatted;
-  }
-
   static void copyToClipboard(String text, [String? message]) {
     FlutterClipboard.copy(text)
         .then((value) => print('Copied to clipboard: $text'));
@@ -31,7 +18,6 @@ class AppUtils {
       try {
         amount = double.parse(amount);
       } catch (e) {
-        print("======> formatCoin Error parsing amount: $e");
         amount = 0;
       }
     }

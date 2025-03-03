@@ -10,8 +10,6 @@ class TransactionHandler {
   final Credentials _credentials;
   final int _chainId;
 
-  Function(Map<String, dynamic> txParams) get estimateGas => _estimateGas;
-
   TransactionHandler(this._web3client, this._credentials, this._chainId);
 
   Future<String> handleTransaction(Map<String, dynamic> txParams) async {
@@ -76,7 +74,7 @@ class TransactionHandler {
     final nonce = await _web3client.getTransactionCount(from);
 
     // Estimate gas
-    final gasLimit = await _estimateGas(params);
+    final gasLimit = await estimateGas(params);
 
     // Get gas price
     final gasPrice = await _getGasPrice(params);
@@ -98,7 +96,7 @@ class TransactionHandler {
     );
   }
 
-  Future<BigInt> _estimateGas(Map<String, dynamic> txParams) async {
+  Future<BigInt> estimateGas(Map<String, dynamic> txParams) async {
     try {
       final estimation = await _web3client.estimateGas(
         sender: txParams['from'] != null

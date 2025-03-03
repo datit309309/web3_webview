@@ -1,6 +1,6 @@
 name: web3_webview
 description: "The bridge communicate between in-app webview and mobile-app by standard EIP-1193."
-version: 1.0.0
+version: 1.0.3
 homepage: https://github.com/datit309309/web3_webview
 
 environment:
@@ -19,6 +19,7 @@ dependencies:
   clipboard: ^0.1.3
   intl: ^0.20.2
   uuid: ^4.5.1
+  pointycastle: ^3.9.1
 
 dev_dependencies:
   flutter_test:
@@ -31,5 +32,4 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - packages/web3_webview/assets/posi.min.js
     - packages/web3_webview/assets/ethers.min.js
