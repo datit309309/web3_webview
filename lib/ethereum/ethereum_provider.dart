@@ -94,7 +94,7 @@ class EthereumProvider {
     _state = WalletState(
       chainId: defaultNetwork.chainId,
       address: getAddressFromPrivateKey(privateKey),
-      isConnected: getAddressFromPrivateKey(privateKey) != null,
+      isConnected: false,
     );
 
     // Add networks

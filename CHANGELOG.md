@@ -1,3 +1,6 @@
+## 1.0.5
+* Fix Auto connect wallet
+
 ## 1.0.4
 * FIx UI
 
