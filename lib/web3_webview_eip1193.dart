@@ -822,14 +822,6 @@ class _InAppWebViewEIP1193State extends State<Web3WebView> {
     _provider.setContext(context);
   }
 
-  @override
-  dispose() {
-    _provider.dispose();
-    _webViewController = null;
-    _webViewController?.dispose();
-    super.dispose();
-  }
-
   ///Load provider initial web3 to inject web app
   Future<void> _loadWeb3() async {
     try {

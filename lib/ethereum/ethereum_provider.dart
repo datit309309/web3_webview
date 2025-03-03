@@ -41,10 +41,6 @@ class EthereumProvider {
   InAppWebViewController? _webViewController;
   EIP6963ProviderInfo? _eip6963ProviderInfo;
 
-  // Stream controllers
-  final _stateController = StreamController<WalletState>.broadcast();
-  Stream<WalletState> get stateStream => _stateController.stream;
-
   // Block number cache
   DateTime? _lastBlockFetch;
   String? _cachedBlockNumber;
@@ -197,7 +193,6 @@ class EthereumProvider {
   }
 
   void dispose() {
-    _stateController.close();
     _web3client.dispose();
   }
 
@@ -403,7 +398,6 @@ class EthereumProvider {
       isConnected: isConnected,
       chainId: chainId,
     );
-    _stateController.add(_state);
   }
 
   Future<void> _emitToWebView(String eventName, dynamic data) async {
